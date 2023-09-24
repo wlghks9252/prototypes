@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <!-- Use correct character set. -->
+    <meta charset="utf-8" />
+    <!-- Tell IE to use the latest, best version. -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <!-- Make the application on mobile take up the full browser screen and disable user scaling. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"
+    />
+    <title>남양주왕숙2지구 콘텐츠</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.89/Build/Cesium/Cesium.js"></script>
+    <!--<link href="http://localhost:8083/Cesium-1.89/Apps/Sandcastle/templates/bucket.css" rel="stylesheet">-->
+    <link href="https://sandcastle.cesium.com/templates/bucket.css" rel="stylesheet">
+    
+    <style>
+    @import url(https://cesium.com/downloads/cesiumjs/releases/1.89/Build/Cesium/Widgets/widgets.css);
+
+
+      #toolbar {
+        background: rgba(42, 42, 42, 0.8);
+        padding: 4px;
+        border-radius: 4px;
+      }
+
+      #toolbar input {
+        vertical-align: middle;
+        padding-top: 2px;
+        padding-bottom: 2px;
+      }
+
+      #toolbar table tr {
+        transform: translateY(0);
+        transition: transform 0.4s ease-out;
+      }
+
+      #toolbar table tr.up {
+        transform: translateY(33px);
+        transition: none;
+      }
+
+      #toolbar table tr.down {
+        transform: translateY(-33px);
+        transition: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="cesiumContainer" class="fullSize"></div>
+    <div id="loadingOverlay"><h1>Loading...</h1></div>
+    <div id="toolbar">
+      <table>
+        <tbody data-bind="foreach: layers">
+          <tr data-bind="css: { up: $parent.upLayer === $data, down: $parent.downLayer === $data }">
+            <td><input type="checkbox" data-bind="checked: show"></td>
+            <td>
+              <span data-bind="text: name, visible: !$parent.isSelectableLayer($data)"></span>
+              <select data-bind="visible: $parent.isSelectableLayer($data), options: $parent.baseLayers, optionsText: 'name', value: $parent.selectedLayer"></select>
+            </td>
+            <td>
+              <input type="range" min="0" max="1" step="0.01" data-bind="value: alpha, valueUpdate: 'input'">
+            </td>
+            <td>
+              <button type="button" class="cesium-button" data-bind="click: function() { $parent.raise($data, $index()); }, visible: $parent.canRaise($index())">
+                up
+              </button>
+            </td>
+            <td>
+              <button type="button" class="cesium-button" data-bind="click: function() { $parent.lower($data, $index()); }, visible: $parent.canLower($index())">
+                down
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <script>
+
+    // Cesium ion Access Token : 사용자 본인 것으로 교체 사용을 권장
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiNDkwZjJhOS1mMzk1LTQyNWQtODUxNS05MzIzMjczYjJiM2IiLCJpZCI6MzE4OTIsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1OTYxMDMxNDZ9.VNubg4IInTepymHyJauFNquxJAUQ36wgFHttjWL7aec';
+
+     var viewer = new Cesium.Viewer("cesiumContainer", {
+        baseLayerPicker: false,
+     });
+
+     /*  var viewer = new Cesium.Viewer("cesiumContainer", {
+        terrainProvider: new Cesium.CesiumTerrainProvider({
+          url: Cesium.IonResource.fromAssetId(1),
+        }),
+      });  */
+	 
+     viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
+        url: 'http://52.231.53.180:8002/srtm_korea_ws2'
+    }); 
+
+    //3D모델 (건물)
+    var tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url : 'http://52.231.53.180:8002/static/Data/bldgBU/tileset.json'
+        })
+    );
+    
+    //3D모델 (DeckFence)
+    var tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url : 'http://52.231.53.180:8002/static/Data/deckfence/tileset.json'
+        })
+    );
+
+    //3D모델 (가로등 Lamp)
+    var tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url : 'http://52.231.53.180:8002/static/Data/lamp/tileset.json'
+        })
+    );
+
+    //3D모델 (가로수 Tree)
+    var tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url : 'http://52.231.53.180:8002/static/Data/tree/tileset.json'
+        })
+    );
+
+    var imageryLayers = viewer.imageryLayers;
+
+    var viewModel = {
+      layers: [],
+      baseLayers: [],
+      upLayer: null,
+      downLayer: null,
+      selectedLayer: null,
+      isSelectableLayer: function (layer) {
+        return this.baseLayers.indexOf(layer) >= 0;
+      },
+      raise: function (layer, index) {
+        imageryLayers.raise(layer);
+        viewModel.upLayer = layer;
+        viewModel.downLayer = viewModel.layers[Math.max(0, index - 1)];
+        updateLayerList();
+        window.setTimeout(function () {
+          viewModel.upLayer = viewModel.downLayer = null;
+        }, 10);
+      },
+      lower: function (layer, index) {
+        imageryLayers.lower(layer);
+        viewModel.upLayer =
+          viewModel.layers[
+            Math.min(viewModel.layers.length - 1, index + 1)
+          ];
+        viewModel.downLayer = layer;
+        updateLayerList();
+        window.setTimeout(function () {
+          viewModel.upLayer = viewModel.downLayer = null;
+        }, 10);
+      },
+      canRaise: function (layerIndex) {
+        return layerIndex > 0;
+      },
+      canLower: function (layerIndex) {
+        return layerIndex >= 0 && layerIndex < imageryLayers.length - 1;
+      },
+    };
+	
+    var baseLayers = viewModel.baseLayers;
+
+    Cesium.knockout.track(viewModel);
+        
+    function setupLayers() {
+      // Create all the base layers that this example will support.
+      // These base layers aren't really special.  It's possible to have multiple of them
+      // enabled at once, just like the other layers, but it doesn't make much sense because
+      // all of these layers cover the entire globe and are opaque.
+      var layers = [{layer : 'Base', tileType : 'png'}, 
+                    {layer : 'Gray', tileType : 'png'},
+                    {layer : 'Midnight', tileType : 'png'},
+                    {layer : 'Hybrid', tileType : 'png'},
+                    {layer : 'Satellite', tileType : 'jpeg'} ]
+
+      var selLayer = layers[4];  
+
+      addBaseLayerOption("Bing Maps Aerial", undefined); // the current base layer
+      addBaseLayerOption(
+        "Bing Maps Road",
+        Cesium.createWorldImagery({
+          style: Cesium.IonWorldImageryStyle.ROAD,
+        })
+      );
+	  
+      addBaseLayerOption(
+        "ArcGIS World Street Maps",
+        new Cesium.ArcGisMapServerImageryProvider({
+          url:
+            "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer",
+        })
+      );
+	  
+      addBaseLayerOption(
+        "OpenStreetMap",
+        new Cesium.OpenStreetMapImageryProvider()
+      );
+
+    // Vworld 요청키 : 사용자 본인 것으로 교체 사용을 권장
+	   const api_key = "BD5CB9CB-8173-3F92-988F-0A30F5615D7F"
+	
+      addBaseLayerOption(
+        "Vworld Base",
+        new Cesium.UrlTemplateImageryProvider({
+            url : 'https://api.vworld.kr/req/wmts/1.0.0/'+api_key+'/Base/{z}/{y}/{x}.png'
+        })
+      );
+
+      addBaseLayerOption(
+        "Vworld Satellite",
+        new Cesium.WebMapTileServiceImageryProvider({
+            url: 'http://api.vworld.kr/req/wmts/1.0.0/'+api_key+'/' + `${selLayer.layer}/{TileMatrix}/{TileRow}/{TileCol}.${selLayer.tileType}`,
+            layer : 'Base',
+            style : 'default',
+            maximumLevel: 19,
+            credit : new Cesium.Credit('Vworld Korea')
+         })
+      ); 
+
+      // Create the additional layers
+
+      addAdditionalLayerOption(
+        "조감도",
+        new Cesium.TileMapServiceImageryProvider({
+          url: 'http://52.231.53.180:8002/static/Data/wangsuk_1026',
+        }),
+        1
+      );
+	  
+      addAdditionalLayerOption(
+        "항공영상 Cesium TMS",
+        new Cesium.TileMapServiceImageryProvider({
+          url: 'http://52.231.53.180:8002/static/Data/NYJ',
+        }),
+        1,
+        false
+      );
+      
+      addAdditionalLayerOption(
+        "항공영상 GeoServer WMS",
+        new Cesium.WebMapServiceImageryProvider({
+          url: 'http://192.168.10.68:8083/geoserver/wms',
+          layers : 'test:bldgfplod2',
+          parameters:{
+                transparent : true,
+                format: 'image/png'
+          }
+        }),
+        1,
+        false
+      );
+
+      addAdditionalLayerOption(
+        "토지이용도",
+        new Cesium.WebMapServiceImageryProvider({
+          url: 'http://52.231.53.180:8180/geoserver/wms',
+          layers : 'Namyangju:landuse',
+          parameters:{
+                transparent : true,
+                format: 'image/png'
+          }
+        }),
+        1,
+        false
+      );
+    }
+	
+    function addBaseLayerOption(name, imageryProvider) {
+      var layer;
+      if (typeof imageryProvider === "undefined") {
+        layer = imageryLayers.get(0);
+        viewModel.selectedLayer = layer;
+      } else {
+        layer = new Cesium.ImageryLayer(imageryProvider);
+      }
+
+      layer.name = name;
+      baseLayers.push(layer);
+    }
+
+    function addAdditionalLayerOption(name, imageryProvider, alpha, show) {
+      var layer = imageryLayers.addImageryProvider(imageryProvider);
+      layer.alpha = Cesium.defaultValue(alpha, 0.5);
+      layer.show = Cesium.defaultValue(show, true);
+      layer.name = name;
+      Cesium.knockout.track(layer, ["alpha", "show", "name"]);
+    }
+
+    function updateLayerList() {
+      var numLayers = imageryLayers.length;
+      viewModel.layers.splice(0, viewModel.layers.length);
+      for (var i = numLayers - 1; i >= 0; --i) {
+        viewModel.layers.push(imageryLayers.get(i));
+      }
+    }
+
+    setupLayers();
+    updateLayerList();
+
+    // Bind the viewModel to the DOM elements of the UI that call for it.
+    var toolbar = document.getElementById("toolbar");
+    Cesium.knockout.applyBindings(viewModel, toolbar);
+
+    Cesium.knockout
+      .getObservable(viewModel, "selectedLayer")
+      .subscribe(function (baseLayer) {
+        // Handle changes to the drop-down base layer selector.
+        var activeLayerIndex = 0;
+        var numLayers = viewModel.layers.length;
+        for (var i = 0; i < numLayers; ++i) {
+          if (viewModel.isSelectableLayer(viewModel.layers[i])) {
+            activeLayerIndex = i;
+            break;
+          }
+        }
+        var activeLayer = viewModel.layers[activeLayerIndex];
+        var show = activeLayer.show;
+        var alpha = activeLayer.alpha;
+        imageryLayers.remove(activeLayer, false);
+        imageryLayers.add(baseLayer, numLayers - activeLayerIndex - 1);
+        baseLayer.show = show;
+        baseLayer.alpha = alpha;
+        updateLayerList();
+      });
+	  
+      viewer.camera.flyTo({
+          destination : Cesium.Cartesian3.fromDegrees(127.169374, 37.607401, 1500),
+          orientation : {
+            heading : Cesium.Math.toRadians(50.0),
+            pitch : Cesium.Math.toRadians(-45.0),
+            roll : 0.0
+            }
+       }); 
+
+    </script>
+    
+  </body>
+</html>

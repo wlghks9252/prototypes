@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"
+    />
+    <title>울주군 프로젝트</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.99/Build/Cesium/Cesium.js"></script>
+    <link href="https://sandcastle.cesium.com/templates/bucket.css" rel="stylesheet">
+    
+    <style>
+    @import url(https://cesium.com/downloads/cesiumjs/releases/1.99/Build/Cesium/Widgets/widgets.css);
+
+
+      #toolbar {
+        background: rgba(42, 42, 42, 0.8);
+        padding: 4px;
+        border-radius: 4px;
+      }
+
+      #toolbar input {
+        vertical-align: middle;
+        padding-top: 2px;
+        padding-bottom: 2px;
+      }
+
+      #toolbar table tr {
+        transform: translateY(0);
+        transition: transform 0.4s ease-out;
+      }
+
+      #toolbar table tr.up {
+        transform: translateY(33px);
+        transition: none;
+      }
+
+      #toolbar table tr.down {
+        transform: translateY(-33px);
+        transition: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="cesiumContainer" class="fullSize"></div>
+    <div id="loadingOverlay"><h1>Loading...</h1></div>
+    <div id="toolbar">
+      <table>
+        <tbody data-bind="foreach: layers">
+          <tr data-bind="css: { up: $parent.upLayer === $data, down: $parent.downLayer === $data }">
+            <td><input type="checkbox" data-bind="checked: show"></td>
+            <td>
+              <span data-bind="text: name, visible: !$parent.isSelectableLayer($data)"></span>
+              <select data-bind="visible: $parent.isSelectableLayer($data), options: $parent.baseLayers, optionsText: 'name', value: $parent.selectedLayer"></select>
+            </td>
+            <td>
+              <input type="range" min="0" max="1" step="0.01" data-bind="value: alpha, valueUpdate: 'input'">
+            </td>
+            <td>
+              <button type="button" class="cesium-button" data-bind="click: function() { $parent.raise($data, $index()); }, visible: $parent.canRaise($index())">
+                up
+              </button>
+            </td>
+            <td>
+              <button type="button" class="cesium-button" data-bind="click: function() { $parent.lower($data, $index()); }, visible: $parent.canLower($index())">
+                down
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+	  <table>
+		<tbody data-bind="foreach: lodLayers">
+		  <tr>
+			<td><input type="checkbox" data-bind="checked: show"></td>
+			<td><span data-bind="text: name"><span></td>
+		  </tr>
+		</tbody>
+	  </table>
+    </div>
+    <script>
+
+	// Cesium ion Access Token : 사용자 본인 것으로 교체 사용을 권장
+	Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYjkyNTE4NS0yZWE2LTQxM2UtYjRkNi01NzNkZDRjNjIwMDYiLCJpZCI6MTA0MDgyLCJpYXQiOjE2NTk5NzQ3Mzl9.mE3JidQdvdHxC7UIAZACtN_E5x8N9Zx8mUO9R-POT-M';
+
+	var terrainProvider = new Cesium.CesiumTerrainProvider({
+		url: 'http://192.168.10.9:8002/ujterrain',
+	});
+
+	var viewer = new Cesium.Viewer("cesiumContainer", {
+		//baseLayerPicker: false,
+		terrainProvider: terrainProvider,
+	});
+
+	var collection = new Cesium.PrimitiveCollection();
+	viewer.scene.primitives.add(collection);
+
+	//3D모델 (DeckFence)
+	/* var tileset = viewer.scene.primitives.add(
+		new Cesium.Cesium3DTileset({
+		  url : 'http://52.231.53.180:8002/static/Data/deckfence/tileset.json'
+		})
+	); */
+
+	//3D모델 (가로등 Lamp)
+	/* var tileset = viewer.scene.primitives.add(
+		new Cesium.Cesium3DTileset({
+		  url : 'http://52.231.53.180:8002/static/Data/lamp/tileset.json'
+		})
+	); */
+
+	//3D모델 (가로수 Tree)
+	/* var tileset = viewer.scene.primitives.add(
+		new Cesium.Cesium3DTileset({
+		  url : 'http://52.231.53.180:8002/static/Data/tree/tileset.json'
+		})
+	); */
+
+	var imageryLayers = viewer.imageryLayers;
+
+	var viewModel = {
+		layers: [],
+		lodLayers: [],
+		baseLayers: [],
+		lodLayers: [],
+		upLayer: null,
+		downLayer: null,
+		selectedLayer: null,
+		isSelectableLayer: function(layer) {
+			return this.baseLayers.indexOf(layer) >= 0;
+		},
+		raise: function(layer, index) {
+			imageryLayers.raise(layer);
+			viewModel.upLayer = layer;
+			viewModel.downLayer = viewModel.layers[Math.max(0, index - 1)];
+			updateLayerList();
+			window.setTimeout(function() {
+				viewModel.upLayer = viewModel.downLayer = null;
+			}, 10);
+		},
+		lower: function(layer, index) {
+			imageryLayers.lower(layer);
+			viewModel.upLayer =
+				viewModel.layers[
+					Math.min(viewModel.layers.length - 1, index + 1)
+				];
+			viewModel.downLayer = layer;
+			updateLayerList();
+			window.setTimeout(function() {
+				viewModel.upLayer = viewModel.downLayer = null;
+			}, 10);
+		},
+		canRaise: function(layerIndex) {
+			return layerIndex > 0;
+		},
+		canLower: function(layerIndex) {
+			return layerIndex >= 0 && layerIndex < imageryLayers.length - 1;
+		},
+	};
+
+	var baseLayers = viewModel.baseLayers;
+
+	Cesium.knockout.track(viewModel);
+
+	function setupLayers() {
+		// Create all the base layers that this example will support.
+		// These base layers aren't really special.  It's possible to have multiple of them
+		// enabled at once, just like the other layers, but it doesn't make much sense because
+		// all of these layers cover the entire globe and are opaque.
+		var layers = [
+			{layer: 'Base', tileType: 'png'},
+			{layer: 'Gray',	tileType: 'png'},
+			{layer: 'Midnight',	tileType: 'png'},
+			{layer: 'Hybrid', tileType: 'png'},
+			{layer: 'Satellite', tileType: 'jpeg'}
+		]
+
+		var selLayer = layers[4];
+
+		addBaseLayerOption("Bing Maps Aerial", undefined); // the current base layer
+		addBaseLayerOption(
+			"Bing Maps Road",
+			Cesium.createWorldImagery({
+				style: Cesium.IonWorldImageryStyle.ROAD,
+			})
+		);
+
+		addBaseLayerOption(
+			"ArcGIS World Street Maps",
+			new Cesium.ArcGisMapServerImageryProvider({
+				url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer",
+			})
+		);
+
+
+		addBaseLayerOption(
+			"OpenStreetMap",
+			new Cesium.OpenStreetMapImageryProvider()
+		);
+
+		// Vworld 요청키 : 사용자 본인 것으로 교체 사용을 권장
+		const api_key = "BD5CB9CB-8173-3F92-988F-0A30F5615D7F"
+
+		addBaseLayerOption(
+			"Vworld Base",
+			new Cesium.UrlTemplateImageryProvider({
+				url: 'https://api.vworld.kr/req/wmts/1.0.0/' + api_key + '/Base/{z}/{y}/{x}.png'
+			})
+		);
+
+		addBaseLayerOption(
+			"Vworld Satellite",
+			new Cesium.WebMapTileServiceImageryProvider({
+				url: 'http://api.vworld.kr/req/wmts/1.0.0/' + api_key + '/' + `${selLayer.layer}/{TileMatrix}/{TileRow}/{TileCol}.${selLayer.tileType}`,
+				layer: 'Base',
+				style: 'default',
+				maximumLevel: 19,
+				credit: new Cesium.Credit('Vworld Korea')
+			})
+		);
+
+		addBaseLayerOption(
+			"WMTS",
+			new Cesium.WebMapTileServiceImageryProvider({
+				url: 'http://192.168.10.9:8002/static/ujdataset/ujaerialimg_a/WMTSCapabilities.xml',
+				layer: 'Base',
+				style: 'default',
+				format:"image/png",
+				maximumLevel: 19,
+			})
+		);
+
+		// Create the additional layers
+		
+	/* 	addAdditionalLayerOption(
+			"항공사진영상",
+			new Cesium.TileMapServiceImageryProvider({
+				url: 'http://192.168.10.9:8002/static/ujdataset/ujaerialimg',
+			}),
+			1,
+			false
+		);
+
+		addAdditionalLayerOption(
+			"실감정사영상",
+			new Cesium.TileMapServiceImageryProvider({
+				url: 'http://192.168.10.9:8002/static/ujdataset/ujrealortho',
+			}),
+			1,
+			false
+		);
+ */
+	
+
+		addAdditionalLayerOption(
+			"항공사진영상 WMTS",
+			new Cesium.WebMapTileServiceImageryProvider({
+				url: "http://192.168.10.9:8002/static/ujdataset/ujaerialimg/{TileMatrix}/{TileCol}/{TileRow}.png",
+				layer: "",
+				style: "",
+				// format: "image/png",
+				tileMatrixSetID: "",
+				
+			}),
+			1,
+			true
+		);
+
+		addAdditionalLayerOption(
+			"실감정사영상 WMTS",
+			new Cesium.WebMapTileServiceImageryProvider({
+				url: "http://192.168.10.9:8002/static/ujdataset/ujrealortho/{TileMatrix}/{TileCol}/{TileRow}.png",
+				layer: "",
+				style: "",
+				// format: "image/png",
+				tileMatrixSetID: "",
+				
+			}),
+			1,
+			true
+		);
+		
+	
+		
+		
+		/* addAdditionalLayerOption(
+			"항공영상",
+			new Cesium.TileMapServiceImageryProvider({
+				url: 'http://192.168.10.68:8002/static/Data/ujaerialimg',
+			}),
+			1,
+			true
+		);	 */
+		/* addAdditionalLayerOption(
+		  "항공영상 GeoServer WMS",
+		  new Cesium.WebMapServiceImageryProvider({
+			url: 'http://52.231.53.180:8180/geoserver/wms',
+			layers : 'Namyangju:NYJ_WS2_mosaic_10cm_200m_20210120_4326',
+			parameters:{
+				  transparent : true,
+				  format: 'image/png'
+			}
+		  }),
+		  1,
+		  false
+		);*/
+
+		addAdditionalLayerOption(
+		  "토지이용도",
+		  new Cesium.WebMapServiceImageryProvider({
+			url: 'http://192.168.10.68/geoserver/wms',
+			layers : 'cite:bldgfplod1',
+			parameters:{
+				  transparent : true,
+				  format: 'image/png'
+			}
+		  }),
+		  1,
+		  true
+		); 
+
+
+		var bldglod1 = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/bldglod1/tileset.json'
+		});
+		bldglod1.style = new Cesium.Cesium3DTileStyle({
+			color: "color('#FFFFFF', 0.7)",
+			show: true
+		});
+		var bldglod2 = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/bldglod2/tileset.json'
+		});
+
+		var bldglod3 = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/bldglod3/tileset.json'
+		});
+		
+		var bldgattfacil = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/bldgattfacil/tileset.json'
+		});
+
+		var roadsurface = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/roadsurface/tileset.json'
+		});	
+
+		var roadattfacil = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/roadattfacil/tileset.json'
+		});
+
+		var gym_1f = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/gmgym/gmgym_f01/tileset.json'
+		});
+		
+		var gym_2f = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/gmgym/gmgym_f02/tileset.json'
+		});
+		
+		var gym_3f = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/gmgym/gmgym_f03/tileset.json'
+		});
+		
+		var gym_roof = new Cesium.Cesium3DTileset({
+			url: 'http://192.168.10.9:8002/static/ujdataset/gmgym/gmgym_roof/tileset.json'
+		});
+
+		
+		add3DTilesetLayerOption("3D 건물 LOD 1.0", bldglod1, false);
+		add3DTilesetLayerOption("3D 건물 LOD 2.5", bldglod2, false);
+		add3DTilesetLayerOption("3D 건물 LOD 3.0", bldglod3, false);
+		add3DTilesetLayerOption("3D건물 부대시설", bldgattfacil, false);
+		add3DTilesetLayerOption("3D 가상형도로", roadsurface, true);
+		add3DTilesetLayerOption("3D 도로부대시설", roadattfacil, true);
+		add3DTilesetLayerOption("군민체육관 1층", gym_1f, true);
+		add3DTilesetLayerOption("군민체육관 2층", gym_2f, false);
+		add3DTilesetLayerOption("군민체육관 3층", gym_3f, false);
+		add3DTilesetLayerOption("군민체육관 지붕", gym_roof, false);
+
+
+	}
+
+	function addBaseLayerOption(name, imageryProvider) {
+		var layer;
+		if (typeof imageryProvider === "undefined") {
+			layer = imageryLayers.get(0);
+			viewModel.selectedLayer = layer;
+		} else {
+			layer = new Cesium.ImageryLayer(imageryProvider);
+		}
+
+		layer.name = name;
+		baseLayers.push(layer);
+	}
+	
+
+	function addAdditionalLayerOption(name, imageryProvider, alpha, show) {
+		var layer = imageryLayers.addImageryProvider(imageryProvider);
+		layer.alpha = Cesium.defaultValue(alpha, 0.6);
+		layer.show = Cesium.defaultValue(show, true);
+		layer.name = name;
+		Cesium.knockout.track(layer, ["alpha", "show", "name"]);
+	}
+
+	function add3DTilesetLayerOption(name, layer, show) {
+		var lodLayers = collection.add(layer);
+		lodLayers.show = Cesium.defaultValue(show, true);
+		lodLayers.name = name;
+		viewModel.lodLayers.push(lodLayers);
+	}
+
+	function updateLayerList() {
+		var numLayers = imageryLayers.length;
+		viewModel.layers.splice(0, viewModel.layers.length);
+		for (var i = numLayers - 1; i >= 0; --i) {
+			viewModel.layers.push(imageryLayers.get(i));
+		}
+	}
+
+	setupLayers(); 
+	pdateLayerList();
+
+	// Bind the viewModel to the DOM elements of the UI that call for it.
+	var toolbar = document.getElementById("toolbar"); Cesium.knockout.applyBindings(viewModel, toolbar);
+
+	Cesium.knockout
+	.getObservable(viewModel, "selectedLayer")
+	.subscribe(function(baseLayer) {
+		// Handle changes to the drop-down base layer selector.
+		var activeLayerIndex = 0;
+		var numLayers = viewModel.layers.length;
+		for (var i = 0; i < numLayers; ++i) {
+			if (viewModel.isSelectableLayer(viewModel.layers[i])) {
+				activeLayerIndex = i;
+				break;
+			}
+		}
+		var activeLayer = viewModel.layers[activeLayerIndex];
+		var show = activeLayer.show;
+		var alpha = activeLayer.alpha;
+		imageryLayers.remove(activeLayer, false);
+		imageryLayers.add(baseLayer, numLayers - activeLayerIndex - 1);
+		baseLayer.show = show;
+		baseLayer.alpha = alpha;
+		updateLayerList();
+	});
+
+	viewer.zoomTo(viewModel.lodLayers[3]);
+    //viewer.zoomTo(bldglod2);
+	</script>
+    
+  </body>
+</html>
